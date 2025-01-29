@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GetApproved - Streamline Your Team's Approval Process</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <span class="text-2xl font-bold text-blue-600">GetApproved</span>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="#features" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">Features</a>
+                        <a href="#how-it-works" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">How It Works</a>
+                        <a href="#privacy" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">Privacy</a>
+                        <a href="#support" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">Support</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="bg-white">
+        <div class="max-w-7xl mx-auto py-16 px-4 sm:py-24 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <h1 class="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">GetApproved</h1>
+                <p class="mt-4 text-xl text-gray-500">Streamline Your Team's Approval Process</p>
+                <div class="mt-8">
+                    <a href="/slack/install" class="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                        Add to Slack
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div id="features" class="py-12 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="lg:text-center">
+                <h2 class="text-3xl font-extrabold text-gray-900">Key Features</h2>
+            </div>
+            <div class="mt-10">
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-medium text-gray-900">Multi-Approver Support</h3>
+                        <p class="mt-2 text-gray-500">Request approval from multiple team members simultaneously</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-medium text-gray-900">Custom Title & Details</h3>
+                        <p class="mt-2 text-gray-500">Clearly communicate what needs approval with dedicated fields</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-medium text-gray-900">URL Integration</h3>
+                        <p class="mt-2 text-gray-500">Include links to documents, PRs, or any web resources</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-medium text-gray-900">Real-time Updates</h3>
+                        <p class="mt-2 text-gray-500">All participants receive instant notifications about approval status</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-medium text-gray-900">Transparent Tracking</h3>
+                        <p class="mt-2 text-gray-500">Each approval request gets a unique ID for easy tracking</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-medium text-gray-900">Clear Documentation</h3>
+                        <p class="mt-2 text-gray-500">All activities are logged in a designated channel</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <div id="how-it-works" class="py-12 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl font-extrabold text-gray-900 text-center mb-8">How to Use GetApproved</h2>
+            <div class="space-y-8">
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <h3 class="text-lg font-medium text-gray-900">1. First Time Setup</h3>
+                    <p class="mt-2 text-gray-500">When you first use the /getapproved command, you'll be prompted to select a channel for logging approval activities. This helps maintain a clear audit trail.</p>
+                </div>
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <h3 class="text-lg font-medium text-gray-900">2. Create an Approval Request</h3>
+                    <p class="mt-2 text-gray-500">Type /getapproved in any channel or DM. Fill in the form with:</p>
+                    <ul class="mt-2 list-disc list-inside text-gray-500 ml-4">
+                        <li>Select approvers from your team</li>
+                        <li>Add the URL that needs review</li>
+                        <li>Provide details about what needs approval</li>
+                    </ul>
+                </div>
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <h3 class="text-lg font-medium text-gray-900">3. Review and Respond</h3>
+                    <p class="mt-2 text-gray-500">Approvers will receive a direct message with the request and can:</p>
+                    <ul class="mt-2 list-disc list-inside text-gray-500 ml-4">
+                        <li>Click Approve to accept</li>
+                        <li>Click Reject to decline</li>
+                        <li>View the status of other approvers</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Section -->
+    <div id="privacy" class="py-12 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl font-extrabold text-gray-900 text-center mb-8">Privacy & Security</h2>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Data Collection & Usage</h3>
+                <p class="text-gray-500 mb-4">GetApproved collects and stores only the information necessary for the approval process:</p>
+                <ul class="list-disc list-inside text-gray-500 mb-6 ml-4">
+                    <li>Team and user IDs for routing messages</li>
+                    <li>Selected logging channel for documentation</li>
+                    <li>Approval request details (URL, description, approvers)</li>
+                    <li>Approval status and decisions</li>
+                </ul>
+                <p class="text-gray-500">We do not:</p>
+                <ul class="list-disc list-inside text-gray-500 ml-4">
+                    <li>Store message contents beyond approval requests</li>
+                    <li>Track user activity outside of approval actions</li>
+                    <li>Share data with third parties</li>
+                    <li>Use data for advertising or marketing</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Support Section -->
+    <div id="support" class="py-12 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl font-extrabold text-gray-900 text-center mb-8">Support</h2>
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Contact Us</h3>
+                    <p class="text-gray-500">Need help? Have questions? Contact our support team:</p>
+                    <ul class="mt-4 space-y-2 text-gray-500">
+                        <li>Email: support@getapproved.com</li>
+                        <li>GitHub Issues: github.com/getapproved/issues</li>
+                        <li>Response Time: Within 24 hours</li>
+                    </ul>
+                </div>
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Common Issues</h3>
+                    <ul class="space-y-2 text-gray-500">
+                        <li>• Bot needs to be invited to the logging channel</li>
+                        <li>• Command must be used in a channel the bot is in</li>
+                        <li>• All approvers must be members of your workspace</li>
+                        <li>• URLs must be valid and accessible</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <p class="text-base text-gray-400">&copy; 2024 GetApproved. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

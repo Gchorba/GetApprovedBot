@@ -1,13 +1,18 @@
 {
-  "dependencies": {
-    "@slack/bolt": "^3.18.0",
-    "dotenv": "^16.4.5"
-  },
+  "name": "slack-approval-app",
+  "version": "1.0.0",
+  "description": "Slack Approval App with OAuth",
+  "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
+  "dependencies": {
+    "@slack/bolt": "^3.17.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  },
   "devDependencies": {
-    "nodemon": "^3.1.7"
+    "nodemon": "^3.0.2"
   }
 }
