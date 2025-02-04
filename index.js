@@ -1,4 +1,4 @@
-const { App, ExpressReceiver, FileInstallationStore } = require('@slack/bolt');
+const { App } = require('@slack/bolt');
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -7,7 +7,6 @@ const fs = require('fs').promises;
 // Create directories if they don't exist
 const publicDir = path.join(__dirname, 'public');
 const dbDir = path.join(__dirname, '.data');
-const CHANNEL_STORAGE_FILE = path.join(__dirname, '.data', 'channels.json');
 
 if (!require('fs').existsSync(publicDir)){
     require('fs').mkdirSync(publicDir);
@@ -16,90 +15,41 @@ if (!require('fs').existsSync(dbDir)){
     require('fs').mkdirSync(dbDir);
 }
 
-// Initialize FileInstallationStore
-const installationStore = new FileInstallationStore({
-    baseDir: path.join(__dirname, '.data'),
-    clientId: process.env.SLACK_CLIENT_ID,
-});
-
-// Updated scopes configuration
-const SLACK_BOT_SCOPES = [
-    'app_mentions:read',
-    'channels:history',
-    'channels:read',
-    'channels:join',
-    'channels:manage',
-    'chat:write',
-    'commands',
-    'groups:history',
-    'groups:read',
-    'im:history',
-    'im:read',
-    'im:write',
-    'mpim:history',
-    'mpim:read',
-    'mpim:write',
-    'users:read',
-    'team:read'
-];
-
-// In-memory storage for approvals and channels
+// In-memory storage for approvals and channel
+let loggingChannelId = null;
 const pendingApprovals = new Map();
-global.teamChannels = new Map();
-
-// Initialize ExpressReceiver
-const receiver = new ExpressReceiver({
-    signingSecret: process.env.SLACK_SIGNING_SECRET,
-    clientId: process.env.SLACK_CLIENT_ID,
-    clientSecret: process.env.SLACK_CLIENT_SECRET,
-    stateSecret: process.env.STATE_SECRET || 'my-state-secret',
-    scopes: SLACK_BOT_SCOPES,
-    installationStore,
-    installerOptions: {
-        directInstall: true,
-    },
-    endpoints: {
-        events: '/slack/events',
-        commands: '/slack/commands',
-        oauth_redirect: '/oauth_redirect'
-    }
-});
-
-// Initialize the app
-const slackApp = new App({
-    signingSecret: process.env.SLACK_SIGNING_SECRET,
-    clientId: process.env.SLACK_CLIENT_ID,
-    clientSecret: process.env.SLACK_CLIENT_SECRET,
-    stateSecret: process.env.STATE_SECRET || 'my-state-secret',
-    scopes: SLACK_BOT_SCOPES,
-    installationStore,
-    receiver,
-    installerOptions: {
-        directInstall: true,
-    },
-});
 
 // Channel storage functions
-async function loadStoredChannels() {
+async function loadStoredChannel() {
     try {
-        const data = await fs.readFile(CHANNEL_STORAGE_FILE, 'utf8');
-        const channels = JSON.parse(data);
-        global.teamChannels = new Map(Object.entries(channels));
+        const data = await fs.readFile(path.join(dbDir, 'channel.json'), 'utf8');
+        const channelData = JSON.parse(data);
+        loggingChannelId = channelData.channelId;
     } catch (err) {
         if (err.code !== 'ENOENT') {
-            console.error('Error loading stored channels:', err);
+            console.error('Error loading stored channel:', err);
         }
     }
 }
 
-async function saveChannels() {
+async function saveChannel() {
     try {
-        const channelsObj = Object.fromEntries(global.teamChannels);
-        await fs.writeFile(CHANNEL_STORAGE_FILE, JSON.stringify(channelsObj, null, 2));
+        await fs.writeFile(
+            path.join(dbDir, 'channel.json'),
+            JSON.stringify({ channelId: loggingChannelId }, null, 2)
+        );
     } catch (err) {
-        console.error('Error saving channels:', err);
+        console.error('Error saving channel:', err);
     }
 }
+
+// Initialize the app with token-based auth
+const app = new App({
+    token: process.env.SLACK_BOT_TOKEN,
+    signingSecret: process.env.SLACK_SIGNING_SECRET,
+    socketMode: false,
+    port: process.env.PORT || 3000
+});
 
 // Helper function to get channel setup view
 function getChannelSetupView() {
@@ -123,7 +73,7 @@ function getChannelSetupView() {
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: "Welcome! Before we begin, please select a channel where approval activities will be logged."
+                    text: "Welcome! Please select a channel where approval activities will be logged."
                 }
             },
             {
@@ -151,7 +101,7 @@ function getChannelSetupView() {
 }
 
 // Helper function to get approval view
-function getApprovalView(channelId) {
+function getApprovalView() {
     return {
         type: "modal",
         callback_id: "request-approval-modal",
@@ -229,43 +179,20 @@ function getApprovalView(channelId) {
                     }
                 ]
             }
-        ],
-        private_metadata: channelId
+        ]
     };
 }
 
-// Add logging middleware
-receiver.router.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
-    next();
-});
-
-// Serve static files
-receiver.router.use(express.static(publicDir));
-
-// OAuth routes
-receiver.router.get('/', (req, res) => {
-    res.send(`
-        <h1>Slack Approval App</h1>
-        <a href="/slack/install"><img alt="Add to Slack" height="40" width="139" 
-        src="https://platform.slack-edge.com/img/add_to_slack.png" 
-        srcSet="https://platform.slack-edge.com/img/add_to_slack.png 1x, 
-        https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" /></a>
-    `);
-});
-
 // Function to log approval activities
-async function logToRecordkeeping(client, message, teamId) {
+async function logToRecordkeeping(client, message) {
     try {
-        const channelId = global.teamChannels.get(teamId);
-        
-        if (!channelId) {
-            console.warn(`Warning: No logging channel configured for team ${teamId}`);
+        if (!loggingChannelId) {
+            console.warn('Warning: No logging channel configured');
             return;
         }
 
         await client.chat.postMessage({
-            channel: channelId,
+            channel: loggingChannelId,
             text: message,
             unfurl_links: false
         });
@@ -275,15 +202,11 @@ async function logToRecordkeeping(client, message, teamId) {
 }
 
 // Command handler for /getapproved
-slackApp.command("/getapproved", async ({ ack, body, client }) => {
-    // Acknowledge immediately
+app.command("/getapproved", async ({ ack, body, client }) => {
     await ack();
 
     try {
-        const teamId = body.team_id;
-        const channelId = global.teamChannels.get(teamId);
-        const view = channelId ? getApprovalView(channelId) : getChannelSetupView();
-
+        const view = loggingChannelId ? getApprovalView() : getChannelSetupView();
         await client.views.open({
             trigger_id: body.trigger_id,
             view: view
@@ -301,82 +224,57 @@ slackApp.command("/getapproved", async ({ ack, body, client }) => {
     }
 });
 
-// Handle channel change submission
-slackApp.view('change-channel-modal', async ({ ack, body, view, client }) => {
+// Handle initial channel selection
+app.view("channel-selection-modal", async ({ ack, view, client }) => {
     try {
-        const channelId = view.state.values.new_logging_channel.channel_select.selected_channel;
-        const teamId = body.team.id;
-        
-        // Try to join the selected channel
+        const channelId = view.state.values.logging_channel.channel_select.selected_channel;
+
         try {
             await client.conversations.join({ channel: channelId });
             console.log(`Successfully joined channel ${channelId}`);
             
-            // Update stored channel
-            global.teamChannels.set(teamId, channelId);
-            await saveChannels();
-            
-            // Acknowledge the view submission first
-            await ack();
+            loggingChannelId = channelId;
+            await saveChannel();
 
-            // If there's a previous view, update it
-            if (view.private_metadata && body.view.previous_view) {
-                const previousView = body.view.previous_view;
-                previousView.private_metadata = channelId;
-                
-                try {
-                    await client.views.update({
-                        view_id: view.private_metadata,
-                        view: previousView
-                    });
-                } catch (updateError) {
-                    console.error('Error updating previous view:', updateError);
-                }
-            }
+            await client.chat.postMessage({
+                channel: channelId,
+                text: "👋 I'll be logging approval activities in this channel."
+            });
 
-            // Send confirmation message
-            try {
-                await client.chat.postMessage({
-                    channel: channelId,
-                    text: "👋 I'll now use this channel for logging approval activities."
-                });
-            } catch (messageError) {
-                console.error('Error sending confirmation message:', messageError);
-            }
+            await ack({
+                response_action: "update",
+                view: getApprovalView()
+            });
         } catch (joinError) {
             console.error('Error joining channel:', joinError);
             await ack({
                 response_action: "errors",
                 errors: {
-                    "new_logging_channel": "Unable to join this channel. Please ensure the bot has been invited or choose a different channel."
+                    "logging_channel": "Unable to join this channel. Please ensure the bot has been invited or choose a different channel."
                 }
             });
         }
     } catch (err) {
-        console.error('Error handling channel change:', err);
-        if (!body.response_sent) {
-            await ack({
-                response_action: "errors",
-                errors: {
-                    "new_logging_channel": "Failed to process channel change. Please try again."
-                }
-            });
-        }
+        console.error('Error handling channel selection:', err);
+        await ack({
+            response_action: "errors",
+            errors: {
+                "logging_channel": "Failed to process channel selection. Please try again."
+            }
+        });
     }
 });
 
-// Handle change channel button click
-slackApp.action('change_channel', async ({ ack, body, client }) => {
-    try {
-        await ack();
+// Handle change channel button
+app.action('change_channel', async ({ ack, body, client }) => {
+    await ack();
 
-        const viewId = body.view ? body.view.id : undefined;
-        
+    try {
         await client.views.push({
             trigger_id: body.trigger_id,
             view: {
                 type: "modal",
-                callback_id: "change-channel-modal",
+                callback_id: "change-channel-modal-update",
                 title: {
                     type: "plain_text",
                     text: "Change Logging Channel",
@@ -407,7 +305,7 @@ slackApp.action('change_channel', async ({ ack, body, client }) => {
                         }
                     }
                 ],
-                private_metadata: viewId || ''
+                private_metadata: body.view.id
             }
         });
     } catch (err) {
@@ -416,79 +314,59 @@ slackApp.action('change_channel', async ({ ack, body, client }) => {
 });
 
 // Handle channel change submission
-slackApp.view('change-channel-modal', async ({ ack, body, view, client }) => {
+app.view('change-channel-modal-update', async ({ ack, body, view, client }) => {
+    const channelId = view.state.values.new_logging_channel.channel_select.selected_channel;
+    const parentViewId = view.private_metadata;
+
     try {
-        const channelId = view.state.values.new_logging_channel.channel_select.selected_channel;
-        const teamId = body.team.id;
+        await client.conversations.join({ channel: channelId });
+        console.log(`Successfully joined channel ${channelId}`);
         
-        try {
-            await client.conversations.join({ channel: channelId });
-            console.log(`Successfully joined channel ${channelId}`);
-            
-            // Update stored channel
-            global.teamChannels.set(teamId, channelId);
-            await saveChannels();
-            
-            await ack();
+        // Update stored channel
+        loggingChannelId = channelId;
+        await saveChannel();
 
-            // Update the parent view's metadata
-            await client.views.update({
-                view_id: view.private_metadata,
-                view: {
-                    ...JSON.parse(JSON.stringify(body.view.previous_view)),
-                    private_metadata: channelId
-                }
-            });
+        // Acknowledge first
+        await ack();
 
-            // Send confirmation message
-            await client.chat.postMessage({
-                channel: channelId,
-                text: "👋 I'll now use this channel for logging approval activities."
-            });
-        } catch (joinError) {
-            console.error('Error joining channel:', joinError);
-            await ack({
-                response_action: "errors",
-                errors: {
-                    "new_logging_channel": "Unable to join this channel. Please ensure the bot has been invited or choose a different channel."
-                }
-            });
-            return;
+        // Send confirmation message
+        await client.chat.postMessage({
+            channel: channelId,
+            text: "👋 I'll now use this channel for logging approval activities."
+        });
+
+        // Update the parent view if it exists
+        if (parentViewId) {
+            try {
+                await client.views.update({
+                    view_id: parentViewId,
+                    view: getApprovalView()
+                });
+            } catch (updateError) {
+                console.error('Error updating parent view:', updateError);
+            }
         }
-    } catch (err) {
-        console.error('Error handling channel change:', err);
+    } catch (joinError) {
+        console.error('Error joining channel:', joinError);
         await ack({
             response_action: "errors",
             errors: {
-                "new_logging_channel": "Failed to process channel change. Please try again."
+                "new_logging_channel": "Unable to join this channel. Please ensure the bot has been invited or choose a different channel."
             }
         });
     }
 });
 
 // Handle modal submission
-slackApp.view("request-approval-modal", async ({ ack, body, client, view }) => {
+app.view("request-approval-modal", async ({ ack, body, client, view }) => {
     try {
-        const channelId = view.private_metadata;
         const approverIds = view.state.values.approvers_selection.selected_approvers.selected_users;
         const requestUrl = view.state.values.url_block.url_input.value;
         const requestDetails = view.state.values.details_block.details_input.value;
         const requesterId = body.user.id;
-        const teamId = body.team.id;
 
         // Generate a unique request ID
         const requestId = `req_${Date.now()}_${requesterId}`;
-
-        // Log new approval request
-await logToRecordkeeping(client, 
-            `🆕 *New Approval Request*\n` +
-            `• *Requester:* <@${requesterId}>\n` +
-            `• *Approvers:* ${approverIds.map(id => `<@${id}>`).join(', ')}\n` +
-            `• *URL:* ${requestUrl}\n` +
-            `• *Details:* ${requestDetails}\n` +
-            `• *Request ID:* ${requestId}`,
-            teamId
-        );
 
         // Store the approval request details
         pendingApprovals.set(requestId, {
@@ -498,13 +376,35 @@ await logToRecordkeeping(client,
             rejections: new Set(),
             url: requestUrl,
             details: requestDetails,
-            status: 'PENDING',
-            teamId
+            status: 'PENDING'
         });
+
+        // Get approver names for logging
+        const approverNames = await Promise.all(
+            approverIds.map(async (id) => {
+                try {
+                    const result = await client.users.info({ user: id });
+                    return result.user.real_name || result.user.name;
+                } catch (error) {
+                    console.error(`Error fetching user info for ${id}:`, error);
+                    return id;
+                }
+            })
+        );
+
+        // Log new approval request
+        await logToRecordkeeping(client, 
+            `🆕 *New Approval Request*\n` +
+            `• *Requester:* <@${requesterId}>\n` +
+            `• *Approvers:* ${approverNames.join(', ')}\n` +
+            `• *URL:* ${requestUrl}\n` +
+            `• *Details:* ${requestDetails}\n` +
+            `• *Request ID:* ${requestId}`
+        );
 
         const messageText = `Approval requested:\n*${requestDetails}*\n*URL:* ${requestUrl}`;
         const requesterInfo = `*Requested By:*\n<@${requesterId}>`;
-        const approversInfo = `*Approvers:*\n${approverIds.map(id => `<@${id}>`).join(', ')}`;
+        const approversInfo = `*Approvers:*\n${approverNames.join(', ')}`;
 
         // Send message to all approvers
         for (const approverId of approverIds) {
@@ -594,7 +494,7 @@ await logToRecordkeeping(client,
 });
 
 // Handle approve action
-slackApp.action("approve_action", async ({ ack, body, client, action }) => {
+app.action("approve_action", async ({ ack, body, client, action }) => {
     try {
         await ack();
         
@@ -614,6 +514,23 @@ slackApp.action("approve_action", async ({ ack, body, client, action }) => {
         request.approvals.add(approverId);
         
         try {
+            // Get approver name for current approver
+            const approverInfo = await client.users.info({ user: approverId });
+            const approverName = approverInfo.user.real_name || approverInfo.user.name;
+
+            // Get names of all who have approved
+            const approvedNames = await Promise.all(
+                Array.from(request.approvals).map(async (id) => {
+                    try {
+                        const result = await client.users.info({ user: id });
+                        return result.user.real_name || result.user.name;
+                    } catch (error) {
+                        console.error(`Error fetching user info for ${id}:`, error);
+                        return id;
+                    }
+                })
+            );
+
             // Update the message
             await client.chat.update({
                 channel: body.container.channel_id,
@@ -640,11 +557,34 @@ slackApp.action("approve_action", async ({ ack, body, client, action }) => {
                             },
                             {
                                 type: "mrkdwn",
-                                text: `*Approvers:*\n${request.approverIds.map(id => `<@${id}>`).join(', ')}`,
+                                text: `*Approvers:*\n${approvedNames.join(', ')}`,
+                            },
+                        ],
+                    },
+                    {
+                        type: "actions",
+                        elements: [
+                            {
+                                type: "button",
+                                text: {
+                                    type: "plain_text",
+                                    emoji: true,
+                                    text: "Approve",
+                                },
+                                style: "primary",
+                                value: `approve_${requestId}`,
+                                action_id: "approve_action",
                             },
                             {
-                                type: "mrkdwn",
-                                text: `*Approved By:*\n${Array.from(request.approvals).map(id => `<@${id}>`).join(', ') || 'None'}`,
+                                type: "button",
+                                text: {
+                                    type: "plain_text",
+                                    emoji: true,
+                                    text: "Reject",
+                                },
+                                style: "danger",
+                                value: `reject_${requestId}`,
+                                action_id: "reject_action",
                             },
                         ],
                     },
@@ -654,47 +594,62 @@ slackApp.action("approve_action", async ({ ack, body, client, action }) => {
             if (request.approvals.size === request.approverIds.length) {
                 request.status = 'APPROVED';
                 
-                // Notify requester
+                // Only notify requester of completion
                 await client.chat.postMessage({
                     channel: request.requesterId,
-                    text: `Your request has been approved by all approvers!\n*URL:* ${request.url}`,
+                    text: `Your request has been fully approved!\n*URL:* ${request.url}`,
                 });
 
-                // Notify all approvers
-                for (const id of request.approverIds) {
-                    await client.chat.postMessage({
-                        channel: id,
-                        text: `The request from <@${request.requesterId}> has been fully approved.\n*URL:* ${request.url}`,
-                    });
-                }
+                // Log completion with user names instead of tags
+                const approverNames = await Promise.all(
+                    Array.from(request.approvals).map(async (id) => {
+                        try {
+                            const result = await client.users.info({ user: id });
+                            return result.user.real_name || result.user.name;
+                        } catch (error) {
+                            console.error(`Error fetching user info for ${id}:`, error);
+                            return id;
+                        }
+                    })
+                );
 
-                // Log completion
                 await logToRecordkeeping(client,
                     `✅ *Approval Request Completed*\n` +
                     `• *Requester:* <@${request.requesterId}>\n` +
                     `• *Status:* Approved\n` +
                     `• *URL:* ${request.url}\n` +
-                    `• *Approvers:* ${Array.from(request.approvals).map(id => `<@${id}>`).join(', ')}\n` +
-                    `• *Request ID:* ${requestId}`,
-                    request.teamId
+                    `• *Approvers:* ${approverNames.join(', ')}\n` +
+                    `• *Request ID:* ${requestId}`
                 );
             } else {
-                // Notify about partial approval
+                // Get remaining approver names
                 const remainingApprovers = request.approverIds.filter(id => !request.approvals.has(id));
+                const remainingNames = await Promise.all(
+                    remainingApprovers.map(async (id) => {
+                        try {
+                            const result = await client.users.info({ user: id });
+                            return result.user.real_name || result.user.name;
+                        } catch (error) {
+                            console.error(`Error fetching user info for ${id}:`, error);
+                            return id;
+                        }
+                    })
+                );
+
+                // Only notify requester of partial approval
                 await client.chat.postMessage({
                     channel: request.requesterId,
-                    text: `Your request was approved by <@${approverId}>. Waiting for ${remainingApprovers.length} more approver(s):\n${remainingApprovers.map(id => `<@${id}>`).join(', ')}\n*URL:* ${request.url}`,
+                    text: `Your request was approved by ${approverName}. Waiting for ${remainingApprovers.length} more approver(s):\n${remainingNames.join(', ')}\n*URL:* ${request.url}`,
                 });
 
-                // Log partial approval
+                // Log partial approval with names instead of tags
                 await logToRecordkeeping(client,
                     `👍 *Partial Approval*\n` +
                     `• *Requester:* <@${request.requesterId}>\n` +
-                    `• *Approved By:* <@${approverId}>\n` +
-                    `• *Remaining Approvers:* ${remainingApprovers.map(id => `<@${id}>`).join(', ')}\n` +
+                    `• *Approved By:* ${approverName}\n` +
+                    `• *Remaining Approvers:* ${remainingNames.join(', ')}\n` +
                     `• *URL:* ${request.url}\n` +
-                    `• *Request ID:* ${requestId}`,
-                    request.teamId
+                    `• *Request ID:* ${requestId}`
                 );
             }
         } catch (updateError) {
@@ -706,7 +661,7 @@ slackApp.action("approve_action", async ({ ack, body, client, action }) => {
 });
 
 // Handle reject action
-slackApp.action("reject_action", async ({ ack, body, client, action }) => {
+app.action("reject_action", async ({ ack, body, client, action }) => {
     try {
         await ack();
         
@@ -727,16 +682,20 @@ slackApp.action("reject_action", async ({ ack, body, client, action }) => {
         request.rejections.add(approverId);
         
         try {
+            // Get rejector name
+            const rejectorInfo = await client.users.info({ user: approverId });
+            const rejectorName = rejectorInfo.user.real_name || rejectorInfo.user.name;
+
             await client.chat.update({
                 channel: body.container.channel_id,
                 ts: body.container.message_ts,
-                text: `Approval request - REJECTED by <@${approverId}>`,
+                text: `Approval request - REJECTED by ${rejectorName}`,
                 blocks: [
                     {
                         type: "section",
                         text: {
                             type: "mrkdwn",
-                            text: `Approval request:\n*${request.details}*\n*URL:* ${request.url}\n\n*REJECTED* by <@${approverId}>`,
+                            text: `Approval request:\n*${request.details}*\n*URL:* ${request.url}\n\n*REJECTED* by ${rejectorName}`,
                         },
                     },
                     {
@@ -749,99 +708,40 @@ slackApp.action("reject_action", async ({ ack, body, client, action }) => {
                             {
                                 type: "mrkdwn",
                                 text: "*Status:*\nREJECTED",
-                            },
-                            {
-                                type: "mrkdwn",
-                                text: `*Approvers:*\n${request.approverIds.map(id => `<@${id}>`).join(', ')}`,
-                            },
-                            {
-                                type: "mrkdwn",
-                                text: `*Rejected By:*\n<@${approverId}>`,
-                            },
+                            }
                         ],
                     },
                 ],
             });
+
+            // Only notify requester
+            await client.chat.postMessage({
+                channel: request.requesterId,
+                text: `Your request was rejected by ${rejectorName}.\n*URL:* ${request.url}`,
+            });
+
+            // Log rejection with name instead of tag
+            await logToRecordkeeping(client,
+                `❌ *Approval Request Rejected*\n` +
+                `• *Requester:* <@${request.requesterId}>\n` +
+                `• *Rejected By:* ${rejectorName}\n` +
+                `• *URL:* ${request.url}\n` +
+                `• *Request ID:* ${requestId}`
+            );
         } catch (updateError) {
             console.error('Error updating message:', updateError);
         }
-
-        // Notify requester
-        await client.chat.postMessage({
-            channel: request.requesterId,
-            text: `Your request was rejected by <@${approverId}>.\n*URL:* ${request.url}`,
-        });
-
-        // Notify other approvers
-        for (const id of request.approverIds) {
-            if (id !== approverId) {
-                await client.chat.postMessage({
-                    channel: id,
-                    text: `The request from <@${request.requesterId}> was rejected by <@${approverId}>.\n*URL:* ${request.url}`,
-                });
-            }
-        }
-
-        // Log rejection
-        await logToRecordkeeping(client,
-            `❌ *Approval Request Rejected*\n` +
-            `• *Requester:* <@${request.requesterId}>\n` +
-            `• *Rejected By:* <@${approverId}>\n` +
-            `• *URL:* ${request.url}\n` +
-            `• *Request ID:* ${requestId}`,
-            request.teamId
-        );
     } catch (err) {
         console.error('Error handling reject action:', err);
     }
 });
 
-// Add specific handler for events
-receiver.router.post('/slack/events', (req, res, next) => {
-    console.log('Received Slack event:', JSON.stringify(req.body, null, 2));
-    
-    if (req.body.type === 'url_verification') {
-        return res.json({ challenge: req.body.challenge });
-    }
-    
-    next();
-});
-
-// OAuth callback handler
-receiver.router.get('/oauth_redirect', async (req, res) => {
-    try {
-        const result = await receiver.installer.handleCallback(req, res);
-        console.log('OAuth flow completed successfully:', result);
-    } catch (error) {
-        console.error('OAuth error:', error);
-        res.send(`<p>OAuth error: ${error.message}</p>`);
-    }
-});
-
-// Favicon handler
-receiver.router.get('/favicon.ico', (req, res) => {
-    res.status(204).end();
-});
-
-// Health check endpoint
-receiver.router.get('/health', (req, res) => {
-    res.send('OK');
-});
-
-// Error handling middleware
-receiver.router.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send('Something broke!');
-});
-
 // Start the app
 (async () => {
     try {
-        await loadStoredChannels(); // Load stored channels
-        const port = process.env.PORT || 3000;
-        await slackApp.start(port);
-        console.log(`⚡️ Slack app is running on port ${port}`);
-        console.log(`🔗 Add to Slack URL: ${process.env.APP_URL}/slack/install`);
+        await loadStoredChannel(); // Load stored channel
+        await app.start();
+        console.log(`⚡️ Slack app is running on port ${process.env.PORT || 3000}`);
     } catch (error) {
         console.error('Unable to start app:', error);
         process.exit(1);
